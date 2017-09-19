@@ -14,7 +14,7 @@ logger.addHandler(fh)
 
 RANDOM_WORD_URL = 'http://setgetgo.com/randomword/get.php'
 WIKIPEDIA_URL = 'https://en.wikipedia.org/w/api.php'
-DEFALUT_WIKIPEDIA_PARAMS = {'format': 'json',
+DEFAULT_WIKIPEDIA_PARAMS = {'format': 'json',
                             'action': 'query',
                             'prop': 'extracts'}
 RANDOM_JOKES_URL = 'http://api.icndb.com/jokes/random'
