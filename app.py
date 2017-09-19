@@ -18,7 +18,7 @@ DEFAULT_WIKIPEDIA_PARAMS = {'format': 'json',
                             'action': 'query',
                             'prop': 'extracts'}
 RANDOM_JOKES_URL = 'http://api.icndb.com/jokes/random'
-WORD_STATISTICS = Counter() # coutnter for word statistics
+WORD_STATISTICS = Counter() # counter for word statistics
 
 
 app = Flask(__name__)
@@ -38,17 +38,7 @@ def random_word():
     len: define the length of the word that you want to be returned,
     must be an int between 3 and 20.
     '''
-    params = {}
-    length = request.args.get('len')
-    # check if length is digit and within limits
-    if str(length).isdigit() and 3 < int(length) < 20:
-        params['len'] = length
-    # getting random word from the API
-    response = requests.get(RANDOM_WORD_URL, params=params)
-    if response.status_code != 200:
-        error_raising(request, response)
-    WORD_STATISTICS[response.content] += 1
-    return jsonify({'word': response.content})
+    return jsonify(get_random_word(length=request.args.get('len')))
 
 @app.route("/article/")
 def article():
@@ -64,16 +54,14 @@ def article():
     # check there any title in request
     if not title:
         # getting random word from the API
-        response = requests.get(RANDOM_WORD_URL)
-        if response.status_code != 200:
-            error_raising(request, response)
-        title = response.content
+        title = get_random_word()['word']
     # getting wiki article
-    wiki_params = {'titles': title}.update(DEFALUT_WIKIPEDIA_PARAMS)
+    wiki_params = {'titles': title}.update(DEFAULT_WIKIPEDIA_PARAMS)
     response = requests.get(WIKIPEDIA_URL, params=wiki_params)
-    if response.status_code != 200:
+    # I wanted to use is_success method but it's not from vanilla Flask
+    if not 200 <= response.status_code < 300:
         error_raising(request, response)
-    # increase coutnter for the workd in statistics
+    # increase counter for the workd in statistics
     WORD_STATISTICS[title] += 1
     return jsonify({'title': title, 'article': response.content})
 
@@ -106,8 +94,8 @@ def random_joke():
     params = {'firstName': request.args.get('first_name') or 'Chuck',
               'lastName': request.args.get('last_name') or 'Norris'}
     response = requests.get(RANDOM_JOKES_URL, params=params)
-
-    if response.status_code == 200:
+    # I wanted to use is_success method but it's not from vanilla Flask=
+    if not 200 <= response.status_code < 300:
         error_raising(request, response)
     try:
         joke = json.loads(response.content)['value']['joke']
@@ -115,6 +103,19 @@ def random_joke():
         error_raising(request, response, 'No joke in the API resoponse, sorry')
 
     return jsonify({'joke': joke})
+
+def get_random_word(length=None):
+    params = {}
+    # check if length is digit and within limits
+    if str(length).isdigit() and 3 < int(length) < 20:
+        params['len'] = length
+    # getting random word from the API
+    response = requests.get(RANDOM_WORD_URL, params=params)
+    # I wanted to use is_success method but it's not from vanilla Flask
+    if not 200 <= response.status_code < 300:
+        error_raising(request, response)
+    WORD_STATISTICS[response.content] += 1
+    return {'word': response.content}
 
 def error_raising(request, response, message='Something went wrong on the API side'):
     logger.error(
