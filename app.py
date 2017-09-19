@@ -1,12 +1,16 @@
-from collections import Counter
 import json
+import logging
+from collections import Counter
 
-from flask import Flask, request
-from flask import jsonify
 import requests
+from flask import Flask, jsonify, request
 
 from excepts import ApiError
 
+logger = logging.getLogger('home_work')
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler('logging.log')
+logger.addHandler(fh)
 
 RANDOM_WORD_URL = 'http://setgetgo.com/randomword/get.php'
 WIKIPEDIA_URL = 'https://en.wikipedia.org/w/api.php'
@@ -25,33 +29,53 @@ def handle_invalid_usage(error):
     response.status_code = error.status_code
     return response
 
-@app.route("/randoarticle/")
-def reandom_word():
+@app.route("/randomword/")
+def random_word():
     '''
-    Api for getting random word and wiki article for it
+    Api for getting random word
 
     Optional query parameter:
-    len: define the length of the word that you want returned,
+    len: define the length of the word that you want to be returned,
     must be an int between 3 and 20.
     '''
     params = {}
     length = request.args.get('len')
-    # check if length is digign and within limits
+    # check if length is digit and within limits
     if str(length).isdigit() and 3 < int(length) < 20:
         params['len'] = length
     # getting random word from the API
     response = requests.get(RANDOM_WORD_URL, params=params)
     if response.status_code != 200:
-        raise ApiError('Something went wrong on the API side', status_code=400)
-    word = response.content
-    # getting wiki article for the random word
-    wiki_params = {'titles': word}.update(DEFALUT_WIKIPEDIA_PARAMS)
+        error_raising(request, response)
+    WORD_STATISTICS[response.content] += 1
+    return jsonify({'word': response.content})
+
+@app.route("/article/")
+def article():
+    '''
+    Api for getting wiki article
+
+    Optional query parameter:
+    title: define the title of the article otherwise getting
+    random word as a title
+    '''
+    params = {}
+    title = request.args.get('title')
+    # check there any title in request
+    if not title:
+        # getting random word from the API
+        response = requests.get(RANDOM_WORD_URL)
+        if response.status_code != 200:
+            error_raising(request, response)
+        title = response.content
+    # getting wiki article
+    wiki_params = {'titles': title}.update(DEFALUT_WIKIPEDIA_PARAMS)
     response = requests.get(WIKIPEDIA_URL, params=wiki_params)
     if response.status_code != 200:
-        raise ApiError('Something went wrong on the API side', status_code=400)
+        error_raising(request, response)
     # increase coutnter for the workd in statistics
-    WORD_STATISTICS[word] += 1
-    return jsonify({'word': word, 'article': response.content})
+    WORD_STATISTICS[title] += 1
+    return jsonify({'title': title, 'article': response.content})
 
 @app.route("/commonwords/")
 def common_words():
@@ -68,7 +92,7 @@ def common_words():
         ]
         return jsonify({'popular': most_common})
     else:
-        raise ApiError('Non relevant n amount', status_code=400)
+        raise ApiError('Non relevant n amount')
 
 @app.route('/randomjoke/')
 def random_joke():
@@ -76,22 +100,32 @@ def random_joke():
     Api for getting random joke
 
     Optional query parameter:
-    last_name: last name of the joke character or it will Noriss
+    last_name: last name of the joke character or it will Norris
     first_name: first name of the joke character or it will Chuck
     '''
-    params = {'firstName': request.args.get('first_name') or '',
-              'lastName': request.args.get('last_name') or ''}
+    params = {'firstName': request.args.get('first_name') or 'Chuck',
+              'lastName': request.args.get('last_name') or 'Norris'}
     response = requests.get(RANDOM_JOKES_URL, params=params)
 
-    if response.status_code != 200:
-        raise ApiError('Something went wrong on the API side', status_code=400)
+    if response.status_code == 200:
+        error_raising(request, response)
     try:
         joke = json.loads(response.content)['value']['joke']
     except KeyError:
-        raise ApiError('No joke in the API resoponse, sorry', status_code=400)
+        error_raising(request, response, 'No joke in the API resoponse, sorry')
 
     return jsonify({'joke': joke})
 
+def error_raising(request, response, message='Something went wrong on the API side'):
+    logger.error(
+        '%s, status %s, error message %s, request args %s, request url %s' %
+        (message,
+         response.status_code,
+         response.content,
+         request.args,
+         request.url)
+        )
+    raise ApiError(message)
 
 if __name__ == "__main__":
     app.run(debug=True)
