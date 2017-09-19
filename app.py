@@ -61,8 +61,6 @@ def article():
     # I wanted to use is_success method but it's not from vanilla Flask
     if not 200 <= response.status_code < 300:
         error_raising(request, response)
-    # increase counter for the workd in statistics
-    WORD_STATISTICS[title] += 1
     return jsonify({'title': title, 'article': response.content})
 
 @app.route("/commonwords/")
